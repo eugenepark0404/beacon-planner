@@ -175,6 +175,14 @@ export default function App() {
   if (err && !plan) return <div className="fatal">{err}</div>;
   if (!plan || !rf) return <div className="loading">불러오는 중…</div>;
 
+  const chk = (label, obj, setObj, key, hint = '') => (
+    <label className="field chk" title={hint}>
+      <span>{label}</span>
+      <input type="checkbox" checked={!!obj[key]}
+             onChange={(e) => setObj({ ...obj, [key]: e.target.checked })} />
+    </label>
+  );
+
   const num = (label, obj, setObj, key, step = 1, unit = '', hint = '') => (
     <label className="field" title={hint}>
       <span>{label}{unit && <em> ({unit})</em>}</span>
@@ -248,6 +256,12 @@ export default function App() {
           {num('층당 최대 비콘', settings, setSettings, 'maxBeaconsPerFloor', 1, '개',
                '예산 상한. 여기 걸리면 목표 미달로 표시됩니다')}
           {num('최소 이격', settings, setSettings, 'minSeparationM', 0.5, 'm')}
+          {chk('임대매장 내부에도 설치', settings, setSettings, 'allowInsideStores',
+               '보통 공용부(통로)만 시공 가능합니다. 켜면 매장 안에도 놓아 커버리지가 올라가지만 실제로는 설치 협의가 필요합니다.')}
+          <p className="note">
+            매장 내부를 제외하면 통로에서만 신호를 쏘게 되어 3중 커버리지가
+            떨어집니다(B1 기준 95% → 82%). 어느 쪽이 현실적인지는 시공 조건에 달렸습니다.
+          </p>
         </details>
 
         <div className="actions">

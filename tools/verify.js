@@ -22,7 +22,7 @@ const CSHARP = [
   { name: '4F', walls: 91,  evalPoints: 1109, beacons: 34, cov3: 0.959 }
 ];
 
-console.log('===== JS 포팅 대조 검증 (전 층 측위 모드) =====');
+console.log('===== JS 포팅 대조 검증 (전 층 측위 · 매장내부 포함 조건) =====');
 console.log(`1m 기준 ${measuredPower1m(rf)} dBm / n=${rf.pathLossExponent} / 측위임계 ${rf.positioningThresholdDbm} dBm`);
 console.log(`측위 도달거리(벽 없을 때) ${rangeAt(rf, rf.positioningThresholdDbm).toFixed(1)} m / 검출 ${rangeAt(rf, rf.detectThresholdDbm).toFixed(1)} m\n`);
 
@@ -32,7 +32,8 @@ for (let f = 0; f < plan.floorCount; f++) {
   const ref = CSHARP[f];
   const t0 = Date.now();
   const walls = plan.walls(f).length;
-  const r = planPositioning(plan, f, rf, set);
+  // C# 원본에는 '매장 내부 제외' 옵션이 없으므로, 대조할 때만 켜서 같은 조건으로 맞춘다
+  const r = planPositioning(plan, f, rf, { ...set, allowInsideStores: true });
   const ms = Date.now() - t0;
 
   const wallOk = walls === ref.walls;

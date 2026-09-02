@@ -96,3 +96,6 @@ button.primary:hover { background: #2559a8; }
   .panel { max-height: none; }
   .floorcanvas { height: 60vh; }
 }
+
+.field.chk input { width: auto; }
+.field.chk { justify-content: space-between; }

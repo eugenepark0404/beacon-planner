@@ -51,7 +51,9 @@ export function defaultSettings() {
     minSeparationM: 5,
 
     seedVerticalCores: true,
-    seedEntrances: true
+    seedEntrances: true,
+    // 임대매장 내부에도 설치할 수 있는가. 보통 공용부만 시공 가능하므로 기본 false
+    allowInsideStores: false
   };
 }
 

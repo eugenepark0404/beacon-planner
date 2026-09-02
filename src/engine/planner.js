@@ -101,19 +101,21 @@ export function planPositioning(plan, floor, rf, set, fixedBeacons = []) {
 // ===========================================================================
 
 /**
- * 이 코어가 floor 층에서 사람이 타고 내리는 지점.
- * 엘리베이터·계단은 수직축이라 항상 축의 중앙,
- * 에스컬레이터는 층에 따라 착지 끝이 달라진다.
+ * 이 코어가 floor 층에서 사람이 타고 내리는 지점 = 축의 중앙.
+ *
+ * 왜 층에 따라 안 움직이는가:
+ * 도면의 (a→b) 축은 "한 개 층을 오르는 한 구간"의 평면 footprint 이고,
+ * floorLo~floorHi 를 잇는 코어는 그 구간이 같은 자리에 층수만큼 겹쳐 쌓인
+ * 형태다(유니티 빌더도 f = lo..hi-1 로 같은 축 위에 한 구간씩 만든다).
+ * 즉 어느 층에서 보든 승강장은 축의 양 끝에 있고, 평면 위치는 층과 무관하다.
+ *
+ * 예전에는 층 번호로 축 위를 보간했는데, 그러면 14 m 짜리 축을 5개 층이
+ * 나눠 가져서 상층 체크포인트가 승강장이 아니라 에스컬레이터 한복판에
+ * 찍혔다. 중앙점은 양쪽 승강장에서 각각 7 m 로, 포착반경(15~30 m) 안에
+ * 두 승강장이 모두 들어온다.
  */
 export function landingPoint(core, floor) {
-  let t = 0.5;
-  if (core.type === 'Escalator') {
-    const span = core.floorHi - core.floorLo;
-    t = span > 0 ? (floor - core.floorLo) / span : 0.5;
-    // up=false 는 b→a 로 진행하는 하행 — 층과 끝점의 대응이 뒤집힌다
-    if (!core.up) t = 1 - t;
-  }
-  return [core.ax + (core.bx - core.ax) * t, core.az + (core.bz - core.az) * t];
+  return [(core.ax + core.bx) * 0.5, (core.az + core.bz) * 0.5];
 }
 
 export function planCheckpoints(plan, floor, rf, set, fixedBeacons = []) {
@@ -456,6 +458,7 @@ function buildCandidates(plan, floor, set) {
   const tryAdd = (p, mandatory, tag) => {
     const q = pushToWalkable(plan, floor, p);
     if (!q) return;
+    if (!mandatory && !set.allowInsideStores && plan.isInsideStore(floor, q[0], q[1])) return;
     const k = `${Math.round(q[0] * 2)},${Math.round(q[1] * 2)}`;
     if (seen.has(k)) return;
     seen.add(k);
@@ -474,7 +477,11 @@ function buildCandidates(plan, floor, set) {
       tryAdd([p.x, p.z], true, p.type);
     }
   }
-  for (const p of plan.walkableGrid(floor, set.candidateStepM)) tryAdd(p, false, 'grid');
+  // 임대매장 안은 우리가 시공할 수 있는 공간이 아니다. 기본은 공용부(통로)만.
+  for (const p of plan.walkableGrid(floor, set.candidateStepM)) {
+    if (!set.allowInsideStores && plan.isInsideStore(floor, p[0], p[1])) continue;
+    tryAdd(p, false, 'grid');
+  }
 
   return list;
 }
