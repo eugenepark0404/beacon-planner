@@ -1,0 +1,21 @@
+{
+  "name": "beacon-planner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "롯데몰 광교 BLE 비콘 배치 추천 — 아주대 Brain 캡스톤",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "verify": "node tools/verify.js"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  }
+}
