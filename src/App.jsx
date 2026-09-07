@@ -93,6 +93,16 @@ export default function App() {
       })) : [],
       cost
     };
+    const o = plan.siteOrigin();
+    doc.siteOrigin = {
+      note: '설치 좌표계 원점 — 건물 외곽 정중앙. X 동서 / Z 남북 / Y 1F 바닥 기준 절대 높이',
+      planX: Math.round(o.x * 1000) / 1000,
+      planZ: Math.round(o.z * 1000) / 1000,
+      spanX: Math.round(o.spanX * 100) / 100,
+      spanZ: Math.round(o.spanZ * 100) / 100
+    };
+    doc.beacons = beacons.map((b) => ({ ...b, site: plan.siteXYZ(b) }));
+
     const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -169,6 +179,41 @@ export default function App() {
 
   const floorBeacons = useMemo(
     () => beacons.filter((b) => b.floor === floor), [beacons, floor]);
+  /**
+   * 설치용 CSV — 현장 작업자가 그대로 들고 다니는 표.
+   * 좌표만으로는 부착 지점을 잡기 어려우므로 층·모드·부착높이를 같이 싣고,
+   * UUID / Major / Minor / MAC 을 빈칸으로 남겨 현장에서 채우게 한다.
+   */
+  const doCsv = () => {
+    const o = plan.siteOrigin();
+    const head = [
+      'id', 'floor', 'mode', 'X_m', 'Y_m', 'Z_m',
+      'mountHeight_m', 'txPower_dBm', 'role',
+      'UUID', 'Major', 'Minor', 'MAC'
+    ];
+    const rows = beacons.map((b) => {
+      const c = plan.siteXYZ(b);
+      return [
+        b.id, plan.floorNames[b.floor],
+        modes[b.floor] === 'checkpoint' ? 'checkpoint' : 'positioning',
+        c.X, c.Y, c.Z,
+        b.height, b.txPowerDbm, b.role || '',
+        '', '', '', ''
+      ].join(',');
+    });
+    const meta = [
+      `# ${plan.building} 비콘 설치 좌표`,
+      `# 원점(0,0) = 건물 외곽 정중앙 · X 동서 / Z 남북 / Y 1F 바닥 기준 절대 높이`,
+      `# 건물 크기 ${o.spanX.toFixed(1)} x ${o.spanZ.toFixed(1)} m · 비콘 ${beacons.length}개`,
+      `# UUID/Major/Minor/MAC 은 현장에서 부착한 비콘 값을 적어 넣으세요`
+    ];
+    const csv = '\uFEFF' + meta.concat(head.join(','), rows).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `BeaconInstall_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+  };
+
   const cur = results?.find((r) => r.floor === floor);
   const selected = beacons.find((b) => b.id === selectedId);
 
@@ -314,7 +359,8 @@ export default function App() {
           빈 곳에서 <b>Shift+클릭</b>하면 추가, 선택 후 <b>Delete</b>로 삭제.
           {selected && (
             <span className="selinfo">
-              선택: <b>{selected.id}</b> ({selected.x.toFixed(1)}, {selected.z.toFixed(1)})
+              선택: <b>{selected.id}</b>
+              {' '}설치좌표 X {plan.siteXYZ(selected).X} · Y {plan.siteXYZ(selected).Y} · Z {plan.siteXYZ(selected).Z} m
               {selected.coreType && ` · ${selected.coreType}`}
               <button onClick={toggleLock}>{selected.locked ? '고정 해제' : '고정'}</button>
               <button onClick={deleteSelected}>삭제</button>
@@ -391,28 +437,67 @@ export default function App() {
             <h2>층 판별 정확도</h2>
             <p className="note">
               지상에서 아래층 비콘이 더 세게 잡히면 층을 오판합니다.
-              슬래브 감쇠가 이걸 막아주는지 모든 보행지점에서 확인한 결과입니다.
+              <b>성공률</b>은 전체 보행지점 중 층을 맞게 판별한 비율이고,
+              <b>신호</b>는 그중 신호가 잡힌 지점의 비율입니다.
+              비콘을 지우면 신호가 안 잡히는 지점이 늘어 성공률이 바로 내려갑니다.
             </p>
             <table className="tbl">
-              <thead><tr><th>층</th><th>신호</th><th>정확도</th><th>오판</th></tr></thead>
+              <thead><tr><th>층</th><th>성공률</th><th>신호</th><th>오판</th><th>무신호</th></tr></thead>
               <tbody>
                 {discrim.perFloor.map((d) => (
                   <tr key={d.floor} className={d.floor === floor ? 'hi' : ''}>
                     <td>{d.floorName}</td>
+                    <td className={'n' + (d.successRate < 0.9 ? ' bad' : '')}>{pct(d.successRate)}</td>
                     <td className="n">{pct(d.signalRatio)}</td>
-                    <td className="n">{pct(d.accuracy)}</td>
                     <td className="n">{d.wrong}</td>
+                    <td className="n">{d.silent}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="total"><td colSpan="2">전체</td>
-                    <td className="n">{pct(discrim.overallAccuracy)}</td>
-                    <td className="n">{discrim.totalWrong}</td></tr>
+                <tr className="total"><td>전체</td>
+                    <td className="n">{pct(discrim.overallSuccess)}</td>
+                    <td className="n">{pct(discrim.signalRatio)}</td>
+                    <td className="n">{discrim.totalWrong}</td>
+                    <td className="n">{discrim.totalSilent}</td></tr>
               </tfoot>
             </table>
+            <p className="note">
+              신호 잡힌 지점만 놓고 본 정확도는 {pct(discrim.overallAccuracy)} 입니다
+              (오판 {discrim.totalWrong} / 무신호 {discrim.totalSilent} / 전체 {discrim.totalPoints}).
+            </p>
           </section>
         )}
+
+        <section>
+          <h2>설치 좌표</h2>
+          <p className="note">
+            원점 (0, 0) 은 <b>건물 외곽의 정중앙</b>입니다.
+            X 는 동서, Z 는 남북, Y 는 1층 바닥을 0 으로 한 절대 높이입니다.
+            현장에서는 이 표를 그대로 들고 가면 됩니다.
+          </p>
+          <table className="tbl">
+            <thead><tr><th>ID</th><th>X</th><th>Y</th><th>Z</th></tr></thead>
+            <tbody>
+              {floorBeacons.map((b) => {
+                const c = plan.siteXYZ(b);
+                return (
+                  <tr key={b.id} className={b.id === selectedId ? 'hi' : ''}
+                      onClick={() => setSelectedId(b.id)}>
+                    <td>{b.id}</td>
+                    <td className="n">{c.X}</td>
+                    <td className="n">{c.Y}</td>
+                    <td className="n">{c.Z}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="note">
+            {plan.floorNames[floor]} {floorBeacons.length}개 ·
+            건물 크기 {plan.siteOrigin().spanX.toFixed(1)} × {plan.siteOrigin().spanZ.toFixed(1)} m
+          </p>
+        </section>
 
         <section>
           <h2>⑤ 저장</h2>
@@ -420,13 +505,21 @@ export default function App() {
             <button className="primary" onClick={doSave} disabled={beacons.length === 0}>
               JSON 저장
             </button>
+            <button onClick={doCsv} disabled={beacons.length === 0}>
+              설치용 CSV
+            </button>
             <label className="filebtn">
               불러오기
               <input type="file" accept="application/json"
                      onChange={(e) => e.target.files[0] && doLoad(e.target.files[0])} />
             </label>
           </div>
-          <p className="note">비콘 {beacons.length}개 · 제원과 설정, 지표까지 같이 저장됩니다.</p>
+          <p className="note">
+            JSON 은 제원·설정·지표까지 통째로 저장합니다.<br />
+            <b>설치용 CSV</b> 는 전 층 비콘의 XYZ 좌표에 UUID / Major / Minor / MAC 빈칸을
+            붙여 내보냅니다 — 현장에서 부착한 비콘의 식별자를 그 자리에 적어 넣으면
+            그대로 매핑표가 됩니다.
+          </p>
         </section>
       </aside>
     </div>

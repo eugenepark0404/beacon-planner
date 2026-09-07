@@ -99,6 +99,47 @@ export class FloorPlan {
     return c;
   }
 
+  /**
+   * 설치 좌표계의 원점 — 건물 전체 외곽의 한가운데.
+   * 층마다 슬래브가 달라도 원점은 하나여야 현장에서 기준이 흔들리지 않는다.
+   */
+  siteOrigin() {
+    if (this._origin) return this._origin;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let f = 0; f < this.floorCount; f++) {
+      const b = this.bounds(f);
+      if (b.minX < minX) minX = b.minX;
+      if (b.maxX > maxX) maxX = b.maxX;
+      if (b.minZ < minZ) minZ = b.minZ;
+      if (b.maxZ > maxZ) maxZ = b.maxZ;
+    }
+    this._origin = {
+      x: (minX + maxX) / 2, z: (minZ + maxZ) / 2,
+      spanX: maxX - minX, spanZ: maxZ - minZ,
+      minX, maxX, minZ, maxZ
+    };
+    return this._origin;
+  }
+
+  /** f 층 슬래브 상단의 높이 (m). */
+  floorLevelM(f) {
+    const L = this.floorLevels || [];
+    return L[f] != null ? L[f] : 0;
+  }
+
+  /**
+   * 비콘 하나의 설치 좌표 (건물 중앙 원점, 미터).
+   *   X 동서 · Y 바닥에서의 절대 높이 · Z 남북
+   */
+  siteXYZ(b) {
+    const o = this.siteOrigin();
+    return {
+      X: Math.round((b.x - o.x) * 100) / 100,
+      Y: Math.round((this.floorLevelM(b.floor) + (b.height || 0)) * 100) / 100,
+      Z: Math.round((b.z - o.z) * 100) / 100
+    };
+  }
+
   areaM2(f) { return this._get(f).areaM2; }
   walls(f) { return this._get(f).walls; }
   bounds(f) { const c = this._get(f); return { minX: c.minX, maxX: c.maxX, minZ: c.minZ, maxZ: c.maxZ }; }

@@ -280,7 +280,14 @@ export function analyzeFloorDiscrimination(plan, results, rf, set) {
       floorName: plan.floorNames[f],
       points: pts.length,
       correct, wrong, silent,
+      // 신호가 잡힌 지점만 놓고 본 정확도 (진단용)
       accuracy: judged > 0 ? correct / judged : 1,
+      // ★ 헤드라인 지표는 이쪽이다.
+      //   예전에는 accuracy 만 보여줬는데, 비콘을 지우면 그 자리가 "오판" 이 아니라
+      //   "신호 없음(silent)" 으로 빠지면서 분모에서 사라져 100% 가 그대로 유지됐다.
+      //   비콘을 아무리 지워도 정확도가 안 떨어지던 원인이다.
+      //   전체 보행지점을 분모로 두면 커버리지가 무너지는 즉시 값이 내려간다.
+      successRate: pts.length > 0 ? correct / pts.length : 0,
       signalRatio: pts.length > 0 ? judged / pts.length : 0,
       meanMarginDb: marginN > 0 ? Math.round((marginSum / marginN) * 10) / 10 : 0,
       worstMarginDb: isFinite(worstMargin) ? Math.round(worstMargin * 10) / 10 : 0,
@@ -290,10 +297,16 @@ export function analyzeFloorDiscrimination(plan, results, rf, set) {
 
   const tc = perFloor.reduce((s, x) => s + x.correct, 0);
   const tw = perFloor.reduce((s, x) => s + x.wrong, 0);
+  const ts = perFloor.reduce((s, x) => s + x.silent, 0);
+  const tp = perFloor.reduce((s, x) => s + x.points, 0);
   return {
     perFloor,
-    overallAccuracy: tc + tw > 0 ? tc / (tc + tw) : 1,
-    totalWrong: tw
+    overallAccuracy: tc + tw > 0 ? tc / (tc + tw) : 1,   // 신호 잡힌 지점만
+    overallSuccess: tp > 0 ? tc / tp : 0,                 // 전체 보행지점 기준 (헤드라인)
+    signalRatio: tp > 0 ? (tc + tw) / tp : 0,
+    totalWrong: tw,
+    totalSilent: ts,
+    totalPoints: tp
   };
 }
 
