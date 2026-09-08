@@ -223,6 +223,8 @@ export default function App() {
 
   const cur = results?.find((r) => r.floor === floor);
   const selected = beacons.find((b) => b.id === selectedId);
+  // 좌표는 FloorPlan 인스턴스(geo)에 묻는다. 도면 JSON(plan)에는 이 함수가 없다.
+  const selXYZ = selected && geo ? geo.siteXYZ(selected) : null;
 
   if (err && !plan) return <div className="fatal">{err}</div>;
   if (!plan || !rf || !geo) return <div className="loading">불러오는 중…</div>;
@@ -367,7 +369,7 @@ export default function App() {
           {selected && (
             <span className="selinfo">
               선택: <b>{selected.id}</b>
-              {' '}설치좌표 X {plan.siteXYZ(selected).X} · Y {plan.siteXYZ(selected).Y} · Z {plan.siteXYZ(selected).Z} m
+              {' '}설치좌표 X {selXYZ.X} · Y {selXYZ.Y} · Z {selXYZ.Z} m
               {selected.coreType && ` · ${selected.coreType}`}
               <button onClick={toggleLock}>{selected.locked ? '고정 해제' : '고정'}</button>
               <button onClick={deleteSelected}>삭제</button>
