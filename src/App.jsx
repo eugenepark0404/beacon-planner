@@ -12,6 +12,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import FloorCanvas from './FloorCanvas.jsx';
 import { runPlan, runEvaluate } from './engine/client.js';
 import { defaultRf, defaultSettings } from './engine/rf.js';
+import { FloorPlan } from './engine/geometry.js';
 import floorplanJson from './data/floorplan.json';
 
 const pct = (v) => (v * 100).toFixed(1) + '%';
@@ -36,6 +37,12 @@ export default function App() {
   const [showLabels, setShowLabels] = useState(false);
   const [showRange, setShowRange] = useState(true);
   const [dirty, setDirty] = useState(false);     // 계산 후 손을 댔는가
+
+  // ★ 설치 좌표 계산기.
+  //   siteOrigin()/siteXYZ() 는 FloorPlan 클래스의 메서드인데, 예전에는 도면
+  //   JSON(plan)에 대고 그대로 불러서 첫 렌더에서 TypeError 가 났다
+  //   (= 배포하면 흰 화면). 도면으로 인스턴스를 만들어 그쪽에 묻는다.
+  const geo = useMemo(() => (plan ? new FloorPlan(plan) : null), [plan]);
 
   // ---- 초기 로드 ----
   // 도면과 기본값은 번들에 들어 있다. 서버가 필요 없다.
@@ -93,7 +100,7 @@ export default function App() {
       })) : [],
       cost
     };
-    const o = plan.siteOrigin();
+    const o = geo.siteOrigin();
     doc.siteOrigin = {
       note: '설치 좌표계 원점 — 건물 외곽 정중앙. X 동서 / Z 남북 / Y 1F 바닥 기준 절대 높이',
       planX: Math.round(o.x * 1000) / 1000,
@@ -101,7 +108,7 @@ export default function App() {
       spanX: Math.round(o.spanX * 100) / 100,
       spanZ: Math.round(o.spanZ * 100) / 100
     };
-    doc.beacons = beacons.map((b) => ({ ...b, site: plan.siteXYZ(b) }));
+    doc.beacons = beacons.map((b) => ({ ...b, site: geo.siteXYZ(b) }));
 
     const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -185,14 +192,14 @@ export default function App() {
    * UUID / Major / Minor / MAC 을 빈칸으로 남겨 현장에서 채우게 한다.
    */
   const doCsv = () => {
-    const o = plan.siteOrigin();
+    const o = geo.siteOrigin();
     const head = [
       'id', 'floor', 'mode', 'X_m', 'Y_m', 'Z_m',
       'mountHeight_m', 'txPower_dBm', 'role',
       'UUID', 'Major', 'Minor', 'MAC'
     ];
     const rows = beacons.map((b) => {
-      const c = plan.siteXYZ(b);
+      const c = geo.siteXYZ(b);
       return [
         b.id, plan.floorNames[b.floor],
         modes[b.floor] === 'checkpoint' ? 'checkpoint' : 'positioning',
@@ -218,7 +225,7 @@ export default function App() {
   const selected = beacons.find((b) => b.id === selectedId);
 
   if (err && !plan) return <div className="fatal">{err}</div>;
-  if (!plan || !rf) return <div className="loading">불러오는 중…</div>;
+  if (!plan || !rf || !geo) return <div className="loading">불러오는 중…</div>;
 
   const chk = (label, obj, setObj, key, hint = '') => (
     <label className="field chk" title={hint}>
@@ -480,7 +487,7 @@ export default function App() {
             <thead><tr><th>ID</th><th>X</th><th>Y</th><th>Z</th></tr></thead>
             <tbody>
               {floorBeacons.map((b) => {
-                const c = plan.siteXYZ(b);
+                const c = geo.siteXYZ(b);
                 return (
                   <tr key={b.id} className={b.id === selectedId ? 'hi' : ''}
                       onClick={() => setSelectedId(b.id)}>
@@ -495,7 +502,7 @@ export default function App() {
           </table>
           <p className="note">
             {plan.floorNames[floor]} {floorBeacons.length}개 ·
-            건물 크기 {plan.siteOrigin().spanX.toFixed(1)} × {plan.siteOrigin().spanZ.toFixed(1)} m
+            건물 크기 {geo.siteOrigin().spanX.toFixed(1)} × {geo.siteOrigin().spanZ.toFixed(1)} m
           </p>
         </section>
 
